@@ -104,10 +104,43 @@ jobs:
           echo "payload:" > lancidr.txt
           curl -sSL ${lan_cidr} | perl -ne '/(.+\/\d+)/ && print "  - |$1|\n"' | sed "s/|/'/g" >> lancidr.txt
 
+      - name: Download mihomo (linux amd64)
+        run: |
+          set -e
+          URL="$(curl -s https://api.github.com/repos/MetaCubeX/mihomo/releases/latest \
+            | jq -r '.assets[].browser_download_url | select(test("mihomo-linux-amd64-compatible.*\\.gz$"))' \
+            | head -n 1)"
+          echo "mihomo url: $URL"
+          curl -L "$URL" -o mihomo.gz
+          gunzip -f mihomo.gz
+          chmod +x mihomo
+          ./mihomo -v || true
+
+      - name: Convert txt -> mrs
+        run: |
+          set -e
+          mkdir -p mrs
+
+          for f in *.txt; do
+            [ -e "$f" ] || continue
+
+            base="${f%.txt}"
+            behavior="domain"
+            case "$base" in
+              *cidr*) behavior="ipcidr" ;;
+            esac
+
+            out="mrs/${base}.mrs"
+            echo "Converting $f -> $out (behavior=$behavior)"
+            ./mihomo convert-ruleset "$behavior" yaml "$f" "$out"
+          done
+
+          ls -lah mrs
+
       - name: Move files to publish directory
         run: |
           mkdir -p publish
-          cp *.txt ./publish/
+          cp ./mrs/*.mrs ./publish/
 
       - name: Release and upload assets
         uses: softprops/action-gh-release@v2
